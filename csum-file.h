@@ -16,7 +16,16 @@ struct hashfile {
 	const char *name;
 	int do_crc;
 	uint32_t crc32;
-	unsigned char buffer[8192];
+	size_t buffer_len;
+	unsigned char *buffer;
+	unsigned char *check_buffer;
+
+	/*
+	 * If set to 1, skip_hash indicates that we should
+	 * not actually compute the hash for this hashfile and
+	 * instead only use it as a buffered write.
+	 */
+	int skip_hash;
 };
 
 /* Checkpoint */

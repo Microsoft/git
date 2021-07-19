@@ -380,6 +380,7 @@ static int checkout_worktree(const struct checkout_opts *opts,
 		init_parallel_checkout();
 
 	enable_fscache(active_nr);
+
 	for (pos = 0; pos < active_nr; pos++) {
 		struct cache_entry *ce = active_cache[pos];
 		if (ce->ce_flags & CE_MATCHED) {

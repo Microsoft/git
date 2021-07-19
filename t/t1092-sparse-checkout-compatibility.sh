@@ -102,6 +102,19 @@ test_expect_success 'setup' '
 		git add . &&
 		git commit -m "rename deep/deeper1/... to folder1/..." &&
 
+		git checkout -b df-conflict base &&
+		rm -rf folder1 &&
+		echo content >folder1 &&
+		git add . &&
+		git commit -m df &&
+
+		git checkout -b fd-conflict base &&
+		rm a &&
+		mkdir a &&
+		echo content >a/a &&
+		git add . &&
+		git commit -m fd &&
+
 		git checkout -b deepest base &&
 		echo "updated deepest" >deep/deeper1/deepest/a &&
 		git commit -a -m "update deepest" &&
@@ -378,7 +391,11 @@ test_expect_success 'diff --staged' '
 test_expect_success 'diff with renames and conflicts' '
 	init_repos &&
 
-	for branch in rename-out-to-out rename-out-to-in rename-in-to-out
+	for branch in rename-out-to-out \
+		      rename-out-to-in \
+		      rename-in-to-out \
+		      df-conflict \
+		      fd-conflict
 	do
 		test_all_match git checkout rename-base &&
 		test_all_match git checkout $branch -- . &&
@@ -391,7 +408,11 @@ test_expect_success 'diff with renames and conflicts' '
 test_expect_success 'diff with directory/file conflicts' '
 	init_repos &&
 
-	for branch in rename-out-to-out rename-out-to-in rename-in-to-out
+	for branch in rename-out-to-out \
+		      rename-out-to-in \
+		      rename-in-to-out \
+		      df-conflict \
+		      fd-conflict
 	do
 		git -C full-checkout reset --hard &&
 		test_sparse_match git reset --hard &&

@@ -824,7 +824,7 @@ static int traverse_by_cache_tree(int pos, int nr_entries, int nr_names,
 		BUG("We need cache-tree to do this optimization");
 
 	/*
-	 * Do what unpack_callback() and unpack_nondirectories() normally
+	 * Do what unpack_callback() and unpack_single_entry() normally
 	 * do. But we walk all paths in an iterative loop instead.
 	 *
 	 * D/F conflicts and higher stage entries are not a concern
@@ -1042,7 +1042,8 @@ static int compare_entry(const struct cache_entry *ce, const struct traverse_inf
 	 * works when the input name is a directory, since ce->name
 	 * ends in a directory separator.
 	 */
-	if (S_ISSPARSEDIR(ce->ce_mode))
+	if (S_ISSPARSEDIR(ce->ce_mode) &&
+	    ce->ce_namelen == traverse_path_len(info, tree_entry_len(n)) + 1)
 		return 0;
 
 	/*
@@ -1107,8 +1108,7 @@ static int unpack_single_entry(int n, unsigned long mask,
 			       unsigned long dirmask,
 			       struct cache_entry **src,
 			       const struct name_entry *names,
-			       const struct traverse_info *info,
-			       int sparse_directory)
+			       const struct traverse_info *info)
 {
 	int i;
 	struct unpack_trees_options *o = info->data;
@@ -1117,13 +1117,13 @@ static int unpack_single_entry(int n, unsigned long mask,
 	if (mask == dirmask && !src[0])
 		return 0;
 
-	/* defer work if our cache entry doesn't match the expectations. */
-	if (src[0]) {
-		if (sparse_directory && !S_ISSPARSEDIR(src[0]->ce_mode))
-			BUG("expected sparse directory entry");
-		else if (!sparse_directory && S_ISSPARSEDIR(src[0]->ce_mode))
-			return 0;
-	}
+	/*
+	 * When we have a sparse directory entry for src[0],
+	 * then this isn't necessarily a directory-file conflict.
+	 */
+	if (mask == dirmask && src[0] &&
+	    S_ISSPARSEDIR(src[0]->ce_mode))
+		conflicts = 0;
 
 	/*
 	 * Ok, we've filled in up to any potential index entry in src[0],
@@ -1156,7 +1156,7 @@ static int unpack_single_entry(int n, unsigned long mask,
 		 */
 		src[i + o->merge] = create_ce_entry(info, names + i, stage,
 						    &o->result, o->merge,
-						    sparse_directory);
+						    bit & dirmask);
 	}
 
 	if (o->merge) {
@@ -1439,7 +1439,7 @@ static int unpack_callback(int n, unsigned long mask, unsigned long dirmask, str
 		}
 	}
 
-	if (unpack_single_entry(n, mask, dirmask, src, names, info, 0) < 0)
+	if (unpack_single_entry(n, mask, dirmask, src, names, info) < 0)
 		return -1;
 
 	if (o->merge && src[0]) {
@@ -1469,10 +1469,8 @@ static int unpack_callback(int n, unsigned long mask, unsigned long dirmask, str
 			}
 		}
 
-		if (is_sparse_directory_entry(src[0], names, info)) {
-			if (unpack_single_entry(n, dirmask, mask & ~dirmask, src, names, info, 1) < 0)
-				return -1;
-		} else if (traverse_trees_recursive(n, dirmask, mask & ~dirmask,
+		if (!is_sparse_directory_entry(src[0], names, info) &&
+		    traverse_trees_recursive(n, dirmask, mask & ~dirmask,
 						    names, info) < 0) {
 			return -1;
 		}
@@ -2690,7 +2688,10 @@ int twoway_merge(const struct cache_entry * const *src,
 			 same(current, oldtree) && !same(current, newtree)) {
 			/* 20 or 21 */
 			return merged_entry(newtree, current, o);
-		} else
+		} else if (current && !oldtree && newtree &&
+			   S_ISSPARSEDIR(current->ce_mode) != S_ISSPARSEDIR(newtree->ce_mode))
+			return merged_entry(newtree, current, o);
+		else
 			return reject_merge(current, o);
 	}
 	else if (newtree) {
